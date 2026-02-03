@@ -265,6 +265,56 @@ export async function registerRoutes(
     }
   });
 
+  // Move files (copy then delete source)
+  app.post("/api/files/move", async (req, res) => {
+    try {
+      const { sources, destination } = req.body;
+      if (!sources || !Array.isArray(sources) || sources.length === 0) {
+        return res.status(400).json({ error: "Sources array is required" });
+      }
+      if (!destination) {
+        return res.status(400).json({ error: "Destination path is required" });
+      }
+
+      const destPath = await normalizePath(destination);
+      const destStat = await fs.promises.stat(destPath);
+      if (!destStat.isDirectory()) {
+        return res.status(400).json({ error: "Destination must be a directory" });
+      }
+
+      const results: { source: string; dest: string; success: boolean; error?: string }[] = [];
+
+      for (const source of sources) {
+        try {
+          const sourcePath = await normalizePath(source);
+          const fileName = path.basename(sourcePath);
+          const destFilePath = path.join(destPath, fileName);
+
+          // Use rename for move (atomic on same filesystem, falls back to copy+delete)
+          await fs.promises.rename(sourcePath, destFilePath);
+
+          results.push({
+            source,
+            dest: toRelativePath(destFilePath),
+            success: true,
+          });
+        } catch (err) {
+          results.push({
+            source,
+            dest: "",
+            success: false,
+            error: (err as Error).message,
+          });
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      log(`Error moving files: ${error}`);
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
   // Read file contents
   app.get("/api/files/read", async (req, res) => {
     try {

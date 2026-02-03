@@ -67,7 +67,7 @@ interface FileBrowserProps {
   setCurrentPath: (path: string) => void;
   selectedFiles?: FileEntry[];
   onSelectionChange?: (files: FileEntry[]) => void;
-  onFileDrop?: (files: FileEntry[]) => void;
+  onFileDrop?: (files: FileEntry[], isCopy: boolean) => void;
   isLocal?: boolean;
 }
 
@@ -197,6 +197,7 @@ export function FileBrowser({
   const [newName, setNewName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dragIsCopy, setDragIsCopy] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFile, setViewerFile] = useState<FileEntry | null>(null);
   const [viewerContent, setViewerContent] = useState<string>("");
@@ -241,7 +242,9 @@ export function FileBrowser({
     const sourcePanelId = e.dataTransfer.types.includes("text/panel-id");
     if (sourcePanelId) {
       setIsDragOver(true);
-      e.dataTransfer.dropEffect = "copy";
+      const isCopy = e.ctrlKey || e.metaKey;
+      setDragIsCopy(isCopy);
+      e.dataTransfer.dropEffect = isCopy ? "copy" : "move";
     }
   }, []);
 
@@ -260,7 +263,9 @@ export function FileBrowser({
         
         if (filesData && sourcePanelId !== panelId && onFileDrop) {
           const files = JSON.parse(filesData) as FileEntry[];
-          onFileDrop(files);
+          // Ctrl/Cmd held = Copy, otherwise Move
+          const isCopy = e.ctrlKey || e.metaKey;
+          onFileDrop(files, isCopy);
         }
       } catch (err) {
         console.error("Drop error:", err);
@@ -488,11 +493,18 @@ export function FileBrowser({
       </div>
 
       <ScrollArea 
-        className={`flex-1 ${isDragOver ? "bg-primary/10 border-2 border-dashed border-primary" : ""}`}
+        className={`flex-1 relative ${isDragOver ? "bg-primary/10 border-2 border-dashed border-primary" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {isDragOver && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="bg-primary text-primary-foreground px-4 py-2 rounded-md font-medium shadow-lg">
+              {dragIsCopy ? "Copy here" : "Move here"}
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <div className="p-3 space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -666,7 +678,7 @@ export function FileBrowser({
       {selectedFiles.length > 0 && (
         <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/50 text-xs text-muted-foreground">
           <span>{selectedFiles.length} item{selectedFiles.length > 1 ? "s" : ""} selected</span>
-          <span className="text-2xs">Drag to other panel to transfer</span>
+          <span className="text-2xs">Drag to move • Hold Ctrl/Cmd to copy</span>
         </div>
       )}
 

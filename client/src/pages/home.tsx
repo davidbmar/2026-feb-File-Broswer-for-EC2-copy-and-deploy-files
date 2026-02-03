@@ -141,13 +141,38 @@ export default function Home() {
     },
   });
 
+  const moveMutation = useMutation({
+    mutationFn: async ({ sources, destination }: { sources: string[]; destination: string }) => {
+      return apiRequest("POST", "/api/files/move", { sources, destination });
+    },
+    onSuccess: (_, { destination }) => {
+      // Invalidate both source and destination directories
+      queryClient.invalidateQueries({ queryKey: ["/api/files"] });
+      toast({
+        title: "Files moved",
+        description: "Files have been moved successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Move failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleFileDrop = useCallback(
-    (targetPanel: "left" | "right", files: FileEntry[]) => {
+    (targetPanel: "left" | "right", files: FileEntry[], isCopy: boolean) => {
       const targetPath = targetPanel === "left" ? leftPanel.currentPath : rightPanel.currentPath;
       const sources = files.map((f) => f.path);
-      copyMutation.mutate({ sources, destination: targetPath });
+      if (isCopy) {
+        copyMutation.mutate({ sources, destination: targetPath });
+      } else {
+        moveMutation.mutate({ sources, destination: targetPath });
+      }
     },
-    [leftPanel.currentPath, rightPanel.currentPath, copyMutation]
+    [leftPanel.currentPath, rightPanel.currentPath, copyMutation, moveMutation]
   );
 
   const toggleLeftMinimize = useCallback(() => {
@@ -319,7 +344,7 @@ export default function Home() {
                           setCurrentPath={handleLeftPathChange}
                           selectedFiles={leftPanel.selectedFiles}
                           onSelectionChange={handleLeftSelectionChange}
-                          onFileDrop={(files) => handleFileDrop("left", files)}
+                          onFileDrop={(files, isCopy) => handleFileDrop("left", files, isCopy)}
                           isLocal={leftPanel.isLocal}
                         />
                       </div>
@@ -358,7 +383,7 @@ export default function Home() {
                           setCurrentPath={handleRightPathChange}
                           selectedFiles={rightPanel.selectedFiles}
                           onSelectionChange={handleRightSelectionChange}
-                          onFileDrop={(files) => handleFileDrop("right", files)}
+                          onFileDrop={(files, isCopy) => handleFileDrop("right", files, isCopy)}
                           isLocal={rightPanel.isLocal}
                         />
                       </div>
