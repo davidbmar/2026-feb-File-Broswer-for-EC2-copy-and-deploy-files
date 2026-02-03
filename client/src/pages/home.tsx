@@ -291,9 +291,9 @@ export default function Home() {
             <ResizablePanel defaultSize={65} minSize={30}>
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 <ResizablePanel 
-                  defaultSize={leftPanel.isMinimized ? 5 : 50} 
-                  minSize={leftPanel.isMinimized ? 5 : 20}
-                  maxSize={leftPanel.isMinimized ? 5 : 80}
+                  defaultSize={leftPanel.isMinimized ? 3 : 50} 
+                  minSize={leftPanel.isMinimized ? 3 : 3}
+                  maxSize={leftPanel.isMinimized ? 3 : 97}
                 >
                   {leftPanel.isMinimized ? (
                     <MinimizedPanel
@@ -330,9 +330,9 @@ export default function Home() {
                 <ResizableHandle withHandle />
 
                 <ResizablePanel 
-                  defaultSize={rightPanel.isMinimized ? 5 : 50} 
-                  minSize={rightPanel.isMinimized ? 5 : 20}
-                  maxSize={rightPanel.isMinimized ? 5 : 80}
+                  defaultSize={rightPanel.isMinimized ? 3 : 50} 
+                  minSize={rightPanel.isMinimized ? 3 : 3}
+                  maxSize={rightPanel.isMinimized ? 3 : 97}
                 >
                   {rightPanel.isMinimized ? (
                     <MinimizedPanel
