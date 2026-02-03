@@ -289,71 +289,83 @@ export default function Home() {
         ) : (
           <ResizablePanelGroup direction="vertical" className="h-full">
             <ResizablePanel defaultSize={65} minSize={30}>
-              <div className="flex h-full">
-                {leftPanel.isMinimized ? (
-                  <MinimizedPanel
-                    panel={leftPanel}
-                    onToggleMinimize={toggleLeftMinimize}
-                    side="left"
-                  />
-                ) : (
-                  <div className="flex-1 flex flex-col border-r border-border min-w-0">
-                    <PanelHeader
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                <ResizablePanel 
+                  defaultSize={leftPanel.isMinimized ? 5 : 50} 
+                  minSize={leftPanel.isMinimized ? 5 : 20}
+                  maxSize={leftPanel.isMinimized ? 5 : 80}
+                >
+                  {leftPanel.isMinimized ? (
+                    <MinimizedPanel
                       panel={leftPanel}
-                      onConnectionSave={handleLeftConnectionSave}
-                      onSetLocal={handleSetLeftLocal}
                       onToggleMinimize={toggleLeftMinimize}
                       side="left"
                     />
-                    <div className="flex-1 overflow-hidden">
-                      <FileBrowser
-                        panelId="left"
-                        onOpenInTerminal={handleOpenInTerminal}
-                        onDownload={handleDownload}
-                        currentPath={leftPanel.currentPath}
-                        setCurrentPath={handleLeftPathChange}
-                        selectedFiles={leftPanel.selectedFiles}
-                        onSelectionChange={handleLeftSelectionChange}
-                        onFileDrop={(files) => handleFileDrop("left", files)}
-                        isLocal={leftPanel.isLocal}
+                  ) : (
+                    <div className="h-full flex flex-col border-r border-border">
+                      <PanelHeader
+                        panel={leftPanel}
+                        onConnectionSave={handleLeftConnectionSave}
+                        onSetLocal={handleSetLeftLocal}
+                        onToggleMinimize={toggleLeftMinimize}
+                        side="left"
                       />
+                      <div className="flex-1 overflow-hidden">
+                        <FileBrowser
+                          panelId="left"
+                          onOpenInTerminal={handleOpenInTerminal}
+                          onDownload={handleDownload}
+                          currentPath={leftPanel.currentPath}
+                          setCurrentPath={handleLeftPathChange}
+                          selectedFiles={leftPanel.selectedFiles}
+                          onSelectionChange={handleLeftSelectionChange}
+                          onFileDrop={(files) => handleFileDrop("left", files)}
+                          isLocal={leftPanel.isLocal}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </ResizablePanel>
 
-                <ResizableHandle withHandle className="hidden md:flex" />
+                <ResizableHandle withHandle />
 
-                {rightPanel.isMinimized ? (
-                  <MinimizedPanel
-                    panel={rightPanel}
-                    onToggleMinimize={toggleRightMinimize}
-                    side="right"
-                  />
-                ) : (
-                  <div className="flex-1 flex flex-col min-w-0">
-                    <PanelHeader
+                <ResizablePanel 
+                  defaultSize={rightPanel.isMinimized ? 5 : 50} 
+                  minSize={rightPanel.isMinimized ? 5 : 20}
+                  maxSize={rightPanel.isMinimized ? 5 : 80}
+                >
+                  {rightPanel.isMinimized ? (
+                    <MinimizedPanel
                       panel={rightPanel}
-                      onConnectionSave={handleRightConnectionSave}
-                      onSetLocal={handleSetRightLocal}
                       onToggleMinimize={toggleRightMinimize}
                       side="right"
                     />
-                    <div className="flex-1 overflow-hidden">
-                      <FileBrowser
-                        panelId="right"
-                        onOpenInTerminal={handleOpenInTerminal}
-                        onDownload={handleDownload}
-                        currentPath={rightPanel.currentPath}
-                        setCurrentPath={handleRightPathChange}
-                        selectedFiles={rightPanel.selectedFiles}
-                        onSelectionChange={handleRightSelectionChange}
-                        onFileDrop={(files) => handleFileDrop("right", files)}
-                        isLocal={rightPanel.isLocal}
+                  ) : (
+                    <div className="h-full flex flex-col">
+                      <PanelHeader
+                        panel={rightPanel}
+                        onConnectionSave={handleRightConnectionSave}
+                        onSetLocal={handleSetRightLocal}
+                        onToggleMinimize={toggleRightMinimize}
+                        side="right"
                       />
+                      <div className="flex-1 overflow-hidden">
+                        <FileBrowser
+                          panelId="right"
+                          onOpenInTerminal={handleOpenInTerminal}
+                          onDownload={handleDownload}
+                          currentPath={rightPanel.currentPath}
+                          setCurrentPath={handleRightPathChange}
+                          selectedFiles={rightPanel.selectedFiles}
+                          onSelectionChange={handleRightSelectionChange}
+                          onFileDrop={(files) => handleFileDrop("right", files)}
+                          isLocal={rightPanel.isLocal}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </ResizablePanel>
 
             <ResizableHandle withHandle />
