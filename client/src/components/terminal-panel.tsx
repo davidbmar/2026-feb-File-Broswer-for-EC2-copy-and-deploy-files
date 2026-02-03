@@ -167,7 +167,8 @@ export function TerminalPanel({
 
   useEffect(() => {
     if (openVimPath && wsRef.current?.readyState === WebSocket.OPEN) {
-      const command = `vim "${openVimPath}"\n`;
+      // Use nano instead of vim - it works better without a full PTY
+      const command = `nano "${openVimPath}"\n`;
       wsRef.current.send(command);
       onVimOpened();
     }

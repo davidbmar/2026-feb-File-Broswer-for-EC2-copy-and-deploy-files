@@ -528,10 +528,10 @@ export function FileBrowser({
                     <>
                       <ContextMenuItem 
                         onClick={() => onOpenInTerminal(entry.path)}
-                        data-testid={`context-open-vim-${entry.name}`}
+                        data-testid={`context-open-editor-${entry.name}`}
                       >
                         <Terminal className="h-4 w-4 mr-2" />
-                        Open in Vim
+                        Edit in Terminal
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                     </>
@@ -722,9 +722,9 @@ export function FileBrowser({
             )}
           </div>
           <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={() => { setViewerOpen(false); setTimeout(() => onOpenInTerminal(viewerFile?.path || ""), 100); }} data-testid="button-viewer-open-vim">
+            <Button variant="outline" onClick={() => { setViewerOpen(false); setTimeout(() => onOpenInTerminal(viewerFile?.path || ""), 100); }} data-testid="button-viewer-open-editor">
               <Terminal className="h-4 w-4 mr-2" />
-              Open in Vim
+              Edit in Terminal
             </Button>
             <Button onClick={() => setViewerOpen(false)} data-testid="button-viewer-close">
               Close

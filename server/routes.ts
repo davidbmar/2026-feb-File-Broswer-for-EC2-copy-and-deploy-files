@@ -367,13 +367,14 @@ export async function registerRoutes(
       terminalSessions.delete(sessionId);
     }
 
-    // Spawn a PTY-like shell using script command for vim support
-    const shell = spawn("script", ["-q", "-c", "/bin/bash -l", "/dev/null"], {
+    // Spawn a login shell - vim may have limited support without full PTY
+    const shell = spawn("/bin/bash", ["-l", "-i"], {
       cwd: WORKSPACE_ROOT,
       env: {
         ...process.env,
         TERM: "xterm-256color",
         COLORTERM: "truecolor",
+        SHELL: "/bin/bash",
       },
       shell: false,
     });
