@@ -213,6 +213,11 @@ export function FileBrowser({
 
   const { data: listing, isLoading, refetch } = useQuery<DirectoryListing>({
     queryKey: ["/api/files", currentPath],
+    queryFn: async () => {
+      const res = await fetch(`/api/files?path=${encodeURIComponent(currentPath)}`);
+      if (!res.ok) throw new Error("Failed to fetch files");
+      return res.json();
+    },
   });
 
   const deleteMutation = useMutation({
