@@ -27,9 +27,11 @@ import { connectionConfigSchema, type InsertConnectionConfig, type ConnectionCon
 interface ConnectionSettingsProps {
   connection: ConnectionConfig | null;
   onSave: (config: InsertConnectionConfig, pemFile: File | null) => void;
+  triggerClassName?: string;
+  label?: string;
 }
 
-export function ConnectionSettings({ connection, onSave }: ConnectionSettingsProps) {
+export function ConnectionSettings({ connection, onSave, triggerClassName, label }: ConnectionSettingsProps) {
   const [open, setOpen] = useState(false);
   const [pemFile, setPemFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,14 +60,10 @@ export function ConnectionSettings({ connection, onSave }: ConnectionSettingsPro
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2" data-testid="button-connection-settings">
-          {connection?.connected ? (
-            <Wifi className="h-4 w-4 text-green-500" />
-          ) : (
-            <WifiOff className="h-4 w-4 text-muted-foreground" />
-          )}
+        <Button variant="ghost" size="sm" className={`gap-2 ${triggerClassName || ""}`} data-testid="button-connection-settings">
+          <Server className="h-4 w-4" />
           <span className="hidden sm:inline">
-            {connection?.host || "Not Connected"}
+            {label || connection?.host || "SSH Config"}
           </span>
         </Button>
       </DialogTrigger>

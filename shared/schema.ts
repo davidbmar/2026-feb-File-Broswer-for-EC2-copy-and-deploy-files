@@ -46,3 +46,12 @@ export interface TransferProgress {
   status: "pending" | "in_progress" | "completed" | "error";
   error?: string;
 }
+
+export interface PanelConfig {
+  id: "left" | "right";
+  isLocal: boolean;
+  connection: ConnectionConfig | null;
+  currentPath: string;
+  isMinimized: boolean;
+  selectedFiles: FileEntry[];
+}

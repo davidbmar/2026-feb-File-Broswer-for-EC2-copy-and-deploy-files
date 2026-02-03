@@ -53,11 +53,16 @@ import {
 import type { FileEntry, DirectoryListing } from "@shared/schema";
 
 interface FileBrowserProps {
+  panelId?: "left" | "right";
   onOpenInTerminal: (path: string) => void;
   onDownload: (path: string) => void;
-  onUpload: (path: string) => void;
+  onUpload?: (path: string) => void;
   currentPath: string;
   setCurrentPath: (path: string) => void;
+  selectedFiles?: FileEntry[];
+  onSelectionChange?: (files: FileEntry[]) => void;
+  onFileDrop?: (files: FileEntry[]) => void;
+  isLocal?: boolean;
 }
 
 function getFileIcon(entry: FileEntry) {
@@ -120,11 +125,16 @@ function formatDate(dateStr: string): string {
 }
 
 export function FileBrowser({
+  panelId,
   onOpenInTerminal,
   onDownload,
   onUpload,
   currentPath,
   setCurrentPath,
+  selectedFiles = [],
+  onSelectionChange,
+  onFileDrop,
+  isLocal = true,
 }: FileBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
@@ -134,6 +144,72 @@ export function FileBrowser({
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const isSelected = useCallback(
+    (file: FileEntry) => selectedFiles.some((f) => f.path === file.path),
+    [selectedFiles]
+  );
+
+  const toggleFileSelection = useCallback(
+    (file: FileEntry, e: React.MouseEvent) => {
+      if (!onSelectionChange) return;
+      
+      if (e.ctrlKey || e.metaKey) {
+        if (isSelected(file)) {
+          onSelectionChange(selectedFiles.filter((f) => f.path !== file.path));
+        } else {
+          onSelectionChange([...selectedFiles, file]);
+        }
+      } else {
+        onSelectionChange([file]);
+      }
+    },
+    [selectedFiles, onSelectionChange, isSelected]
+  );
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, file: FileEntry) => {
+      const filesToDrag = isSelected(file) ? selectedFiles : [file];
+      e.dataTransfer.setData("application/json", JSON.stringify(filesToDrag));
+      e.dataTransfer.setData("text/panel-id", panelId || "");
+      e.dataTransfer.effectAllowed = "copy";
+    },
+    [selectedFiles, isSelected, panelId]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const sourcePanelId = e.dataTransfer.types.includes("text/panel-id");
+    if (sourcePanelId) {
+      setIsDragOver(true);
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      
+      try {
+        const filesData = e.dataTransfer.getData("application/json");
+        const sourcePanelId = e.dataTransfer.getData("text/panel-id");
+        
+        if (filesData && sourcePanelId !== panelId && onFileDrop) {
+          const files = JSON.parse(filesData) as FileEntry[];
+          onFileDrop(files);
+        }
+      } catch (err) {
+        console.error("Drop error:", err);
+      }
+    },
+    [panelId, onFileDrop]
+  );
 
   const { data: listing, isLoading, refetch } = useQuery<DirectoryListing>({
     queryKey: ["/api/files", currentPath],
@@ -293,18 +369,25 @@ export function FileBrowser({
         >
           <FolderPlus className="h-4 w-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => onUpload(currentPath)}
-          data-testid="button-upload"
-          title="Upload"
-        >
-          <Upload className="h-4 w-4" />
-        </Button>
+        {onUpload && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onUpload(currentPath)}
+            data-testid="button-upload"
+            title="Upload"
+          >
+            <Upload className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea 
+        className={`flex-1 ${isDragOver ? "bg-primary/10 border-2 border-dashed border-primary" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {isLoading ? (
           <div className="p-3 space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -318,7 +401,7 @@ export function FileBrowser({
         ) : sortedEntries?.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Folder className="h-12 w-12 mb-3 opacity-50" />
-            <p className="text-sm">No files found</p>
+            <p className="text-sm">{isDragOver ? "Drop files here to transfer" : "No files found"}</p>
           </div>
         ) : (
           <div className="p-1">
@@ -327,14 +410,24 @@ export function FileBrowser({
                 <ContextMenuTrigger>
                   <div
                     className={`flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors ${
-                      selectedFile?.path === entry.path
+                      isSelected(entry)
+                        ? "bg-primary/20 border border-primary/50"
+                        : selectedFile?.path === entry.path
                         ? "bg-accent"
                         : "hover-elevate"
                     }`}
-                    onClick={() => setSelectedFile(entry)}
+                    onClick={(e) => {
+                      setSelectedFile(entry);
+                      toggleFileSelection(entry, e);
+                    }}
                     onDoubleClick={() => handleDoubleClick(entry)}
-                    data-testid={`file-entry-${entry.name}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, entry)}
+                    data-testid={`file-entry-${panelId || "default"}-${entry.name}`}
                   >
+                    {onSelectionChange && (
+                      <div className={`w-3 h-3 rounded-sm border ${isSelected(entry) ? "bg-primary border-primary" : "border-muted-foreground/50"}`} />
+                    )}
                     {getFileIcon(entry)}
                     <span className="flex-1 truncate text-sm">{entry.name}</span>
                     <span className="text-2xs text-muted-foreground w-16 text-right">
@@ -476,6 +569,13 @@ export function FileBrowser({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedFiles.length > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/50 text-xs text-muted-foreground">
+          <span>{selectedFiles.length} item{selectedFiles.length > 1 ? "s" : ""} selected</span>
+          <span className="text-2xs">Drag to other panel to transfer</span>
+        </div>
+      )}
     </div>
   );
 }

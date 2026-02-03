@@ -2,33 +2,48 @@ import { useState, useCallback } from "react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { FileBrowser } from "@/components/file-browser";
 import { TerminalPanel } from "@/components/terminal-panel";
-import { TransferPanel } from "@/components/transfer-panel";
 import { ConnectionSettings } from "@/components/connection-settings";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
-import { Sun, Moon, Terminal, FolderTree, ArrowUpDown } from "lucide-react";
+import { 
+  Sun, Moon, Terminal, ChevronLeft, ChevronRight, 
+  Maximize2, Minimize2, Monitor, Server 
+} from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
-import type { ConnectionConfig, InsertConnectionConfig, TransferProgress } from "@shared/schema";
+import type { ConnectionConfig, InsertConnectionConfig, FileEntry, PanelConfig } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const { theme, setTheme } = useTheme();
-  const [currentPath, setCurrentPath] = useState("/");
   const [openVimPath, setOpenVimPath] = useState<string | null>(null);
   const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
-  const [transfers, setTransfers] = useState<TransferProgress[]>([]);
-  const [uploadPath, setUploadPath] = useState("/");
-  const [connection, setConnection] = useState<ConnectionConfig | null>({
-    id: "local",
-    host: "",
-    username: "",
-    port: 22,
-    connected: false,
+
+  const [leftPanel, setLeftPanel] = useState<PanelConfig>({
+    id: "left",
+    isLocal: true,
+    connection: null,
+    currentPath: "/",
+    isMinimized: false,
+    selectedFiles: [],
   });
-  const [activePanel, setActivePanel] = useState<"files" | "terminal" | "transfers">("files");
+
+  const [rightPanel, setRightPanel] = useState<PanelConfig>({
+    id: "right",
+    isLocal: false,
+    connection: {
+      id: "right",
+      host: "",
+      username: "",
+      port: 22,
+      connected: false,
+    },
+    currentPath: "/",
+    isMinimized: false,
+    selectedFiles: [],
+  });
 
   const handleOpenInTerminal = useCallback((path: string) => {
     setOpenVimPath(path);
-    setActivePanel("terminal");
   }, []);
 
   const handleVimOpened = useCallback(() => {
@@ -39,40 +54,181 @@ export default function Home() {
     window.open(`/api/download?path=${encodeURIComponent(path)}`, "_blank");
   }, []);
 
-  const handleUpload = useCallback((path: string) => {
-    setUploadPath(path);
-    setActivePanel("transfers");
-  }, []);
-
-  const handleAddTransfer = useCallback((transfer: TransferProgress) => {
-    setTransfers((prev) => [...prev, transfer]);
-  }, []);
-
-  const handleRemoveTransfer = useCallback((id: string) => {
-    setTransfers((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const handleUpdateTransfer = useCallback((id: string, update: Partial<TransferProgress>) => {
-    setTransfers((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...update } : t))
-    );
-  }, []);
-
-  const handleUploadComplete = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["/api/files", uploadPath] });
-    queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath] });
-  }, [uploadPath, currentPath]);
-
-  const handleSaveConnection = useCallback(
+  const handleLeftConnectionSave = useCallback(
     (config: InsertConnectionConfig, pemFile: File | null) => {
-      setConnection({
-        id: "local",
-        ...config,
-        pemFileName: pemFile?.name || connection?.pemFileName,
-        connected: false,
-      });
+      setLeftPanel((prev) => ({
+        ...prev,
+        isLocal: false,
+        connection: {
+          id: "left",
+          ...config,
+          pemFileName: pemFile?.name || prev.connection?.pemFileName,
+          connected: false,
+        },
+      }));
     },
-    [connection]
+    []
+  );
+
+  const handleRightConnectionSave = useCallback(
+    (config: InsertConnectionConfig, pemFile: File | null) => {
+      setRightPanel((prev) => ({
+        ...prev,
+        isLocal: false,
+        connection: {
+          id: "right",
+          ...config,
+          pemFileName: pemFile?.name || prev.connection?.pemFileName,
+          connected: false,
+        },
+      }));
+    },
+    []
+  );
+
+  const handleSetLeftLocal = useCallback(() => {
+    setLeftPanel((prev) => ({
+      ...prev,
+      isLocal: true,
+      connection: null,
+    }));
+  }, []);
+
+  const handleSetRightLocal = useCallback(() => {
+    setRightPanel((prev) => ({
+      ...prev,
+      isLocal: true,
+      connection: null,
+    }));
+  }, []);
+
+  const handleLeftPathChange = useCallback((path: string) => {
+    setLeftPanel((prev) => ({ ...prev, currentPath: path }));
+  }, []);
+
+  const handleRightPathChange = useCallback((path: string) => {
+    setRightPanel((prev) => ({ ...prev, currentPath: path }));
+  }, []);
+
+  const handleLeftSelectionChange = useCallback((files: FileEntry[]) => {
+    setLeftPanel((prev) => ({ ...prev, selectedFiles: files }));
+  }, []);
+
+  const handleRightSelectionChange = useCallback((files: FileEntry[]) => {
+    setRightPanel((prev) => ({ ...prev, selectedFiles: files }));
+  }, []);
+
+  const handleFileDrop = useCallback(
+    (targetPanel: "left" | "right", files: FileEntry[], sourcePath: string) => {
+      const targetPath = targetPanel === "left" ? leftPanel.currentPath : rightPanel.currentPath;
+      console.log(`Transfer ${files.length} files from ${sourcePath} to ${targetPath}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/files", targetPath] });
+    },
+    [leftPanel.currentPath, rightPanel.currentPath]
+  );
+
+  const toggleLeftMinimize = useCallback(() => {
+    setLeftPanel((prev) => ({ ...prev, isMinimized: !prev.isMinimized }));
+  }, []);
+
+  const toggleRightMinimize = useCallback(() => {
+    setRightPanel((prev) => ({ ...prev, isMinimized: !prev.isMinimized }));
+  }, []);
+
+  const PanelHeader = ({
+    panel,
+    onConnectionSave,
+    onSetLocal,
+    onToggleMinimize,
+    side,
+  }: {
+    panel: PanelConfig;
+    onConnectionSave: (config: InsertConnectionConfig, pemFile: File | null) => void;
+    onSetLocal: () => void;
+    onToggleMinimize: () => void;
+    side: "left" | "right";
+  }) => (
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50">
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        onClick={onToggleMinimize}
+        data-testid={`button-${side}-minimize`}
+      >
+        {panel.isMinimized ? (
+          side === "left" ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />
+        ) : (
+          side === "left" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+        )}
+      </Button>
+
+      {!panel.isMinimized && (
+        <>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {panel.isLocal ? (
+              <Badge variant="outline" className="gap-1">
+                <Monitor className="h-3 w-3" />
+                Local
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <Server className="h-3 w-3" />
+                {panel.connection?.host || "Not configured"}
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {!panel.isLocal && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onSetLocal}
+                className="h-7 text-xs"
+                data-testid={`button-${side}-set-local`}
+              >
+                <Monitor className="h-3 w-3 mr-1" />
+                Local
+              </Button>
+            )}
+            <ConnectionSettings
+              connection={panel.connection}
+              onSave={onConnectionSave}
+              triggerClassName="h-7"
+              label={panel.isLocal ? "SSH" : "Edit"}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const MinimizedPanel = ({
+    panel,
+    onToggleMinimize,
+    side,
+  }: {
+    panel: PanelConfig;
+    onToggleMinimize: () => void;
+    side: "left" | "right";
+  }) => (
+    <div className="flex flex-col h-full bg-muted/30 border-r border-border">
+      <Button
+        size="icon"
+        variant="ghost"
+        className="m-2"
+        onClick={onToggleMinimize}
+        data-testid={`button-${side}-expand`}
+      >
+        {side === "left" ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </Button>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="writing-mode-vertical text-xs text-muted-foreground transform rotate-180" style={{ writingMode: "vertical-rl" }}>
+          {panel.isLocal ? "Local Files" : panel.connection?.host || "Remote Files"}
+        </div>
+      </div>
+    </div>
   );
 
   return (
@@ -83,42 +239,7 @@ export default function Home() {
           <h1 className="text-base font-semibold">Remote Dev UI</h1>
         </div>
 
-        <div className="hidden md:flex items-center gap-1 ml-4">
-          <Button
-            variant={activePanel === "files" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setActivePanel("files")}
-            className="gap-2"
-            data-testid="button-panel-files"
-          >
-            <FolderTree className="h-4 w-4" />
-            Files
-          </Button>
-          <Button
-            variant={activePanel === "terminal" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setActivePanel("terminal")}
-            className="gap-2"
-            data-testid="button-panel-terminal"
-          >
-            <Terminal className="h-4 w-4" />
-            Terminal
-          </Button>
-          <Button
-            variant={activePanel === "transfers" ? "secondary" : "ghost"}
-            size="sm"
-            onClick={() => setActivePanel("transfers")}
-            className="gap-2"
-            data-testid="button-panel-transfers"
-          >
-            <ArrowUpDown className="h-4 w-4" />
-            Transfers
-          </Button>
-        </div>
-
         <div className="flex-1" />
-
-        <ConnectionSettings connection={connection} onSave={handleSaveConnection} />
 
         <Button
           size="icon"
@@ -143,103 +264,88 @@ export default function Home() {
             onToggleMaximize={() => setIsTerminalMaximized(false)}
           />
         ) : (
-          <>
-            <div className="hidden md:block h-full">
-              <ResizablePanelGroup direction="horizontal" className="h-full">
-                <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-                  <FileBrowser
-                    onOpenInTerminal={handleOpenInTerminal}
-                    onDownload={handleDownload}
-                    onUpload={handleUpload}
-                    currentPath={currentPath}
-                    setCurrentPath={setCurrentPath}
+          <ResizablePanelGroup direction="vertical" className="h-full">
+            <ResizablePanel defaultSize={65} minSize={30}>
+              <div className="flex h-full">
+                {leftPanel.isMinimized ? (
+                  <MinimizedPanel
+                    panel={leftPanel}
+                    onToggleMinimize={toggleLeftMinimize}
+                    side="left"
                   />
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={55} minSize={30}>
-                  <TerminalPanel
-                    openVimPath={openVimPath}
-                    onVimOpened={handleVimOpened}
-                    isMaximized={isTerminalMaximized}
-                    onToggleMaximize={() => setIsTerminalMaximized(true)}
-                  />
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>
-                  <TransferPanel
-                    transfers={transfers}
-                    onAddTransfer={handleAddTransfer}
-                    onRemoveTransfer={handleRemoveTransfer}
-                    onUpdateTransfer={handleUpdateTransfer}
-                    uploadPath={uploadPath}
-                    onUploadComplete={handleUploadComplete}
-                  />
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            </div>
+                ) : (
+                  <div className="flex-1 flex flex-col border-r border-border min-w-0">
+                    <PanelHeader
+                      panel={leftPanel}
+                      onConnectionSave={handleLeftConnectionSave}
+                      onSetLocal={handleSetLeftLocal}
+                      onToggleMinimize={toggleLeftMinimize}
+                      side="left"
+                    />
+                    <div className="flex-1 overflow-hidden">
+                      <FileBrowser
+                        panelId="left"
+                        onOpenInTerminal={handleOpenInTerminal}
+                        onDownload={handleDownload}
+                        currentPath={leftPanel.currentPath}
+                        setCurrentPath={handleLeftPathChange}
+                        selectedFiles={leftPanel.selectedFiles}
+                        onSelectionChange={handleLeftSelectionChange}
+                        onFileDrop={(files) => handleFileDrop("left", files, rightPanel.currentPath)}
+                        isLocal={leftPanel.isLocal}
+                      />
+                    </div>
+                  </div>
+                )}
 
-            <div className="md:hidden h-full">
-              {activePanel === "files" && (
-                <FileBrowser
-                  onOpenInTerminal={handleOpenInTerminal}
-                  onDownload={handleDownload}
-                  onUpload={handleUpload}
-                  currentPath={currentPath}
-                  setCurrentPath={setCurrentPath}
-                />
-              )}
-              {activePanel === "terminal" && (
-                <TerminalPanel
-                  openVimPath={openVimPath}
-                  onVimOpened={handleVimOpened}
-                  isMaximized={isTerminalMaximized}
-                  onToggleMaximize={() => setIsTerminalMaximized(true)}
-                />
-              )}
-              {activePanel === "transfers" && (
-                <TransferPanel
-                  transfers={transfers}
-                  onAddTransfer={handleAddTransfer}
-                  onRemoveTransfer={handleRemoveTransfer}
-                  onUpdateTransfer={handleUpdateTransfer}
-                  uploadPath={uploadPath}
-                  onUploadComplete={handleUploadComplete}
-                />
-              )}
-            </div>
-          </>
+                <ResizableHandle withHandle className="hidden md:flex" />
+
+                {rightPanel.isMinimized ? (
+                  <MinimizedPanel
+                    panel={rightPanel}
+                    onToggleMinimize={toggleRightMinimize}
+                    side="right"
+                  />
+                ) : (
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <PanelHeader
+                      panel={rightPanel}
+                      onConnectionSave={handleRightConnectionSave}
+                      onSetLocal={handleSetRightLocal}
+                      onToggleMinimize={toggleRightMinimize}
+                      side="right"
+                    />
+                    <div className="flex-1 overflow-hidden">
+                      <FileBrowser
+                        panelId="right"
+                        onOpenInTerminal={handleOpenInTerminal}
+                        onDownload={handleDownload}
+                        currentPath={rightPanel.currentPath}
+                        setCurrentPath={handleRightPathChange}
+                        selectedFiles={rightPanel.selectedFiles}
+                        onSelectionChange={handleRightSelectionChange}
+                        onFileDrop={(files) => handleFileDrop("right", files, leftPanel.currentPath)}
+                        isLocal={rightPanel.isLocal}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+
+            <ResizablePanel defaultSize={35} minSize={15}>
+              <TerminalPanel
+                openVimPath={openVimPath}
+                onVimOpened={handleVimOpened}
+                isMaximized={isTerminalMaximized}
+                onToggleMaximize={() => setIsTerminalMaximized(true)}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         )}
       </main>
-
-      <footer className="md:hidden flex items-center border-t border-border bg-card">
-        <Button
-          variant="ghost"
-          className={`flex-1 rounded-none py-3 gap-2 ${activePanel === "files" ? "bg-accent" : ""}`}
-          onClick={() => setActivePanel("files")}
-          data-testid="button-mobile-files"
-        >
-          <FolderTree className="h-4 w-4" />
-          <span className="text-xs">Files</span>
-        </Button>
-        <Button
-          variant="ghost"
-          className={`flex-1 rounded-none py-3 gap-2 ${activePanel === "terminal" ? "bg-accent" : ""}`}
-          onClick={() => setActivePanel("terminal")}
-          data-testid="button-mobile-terminal"
-        >
-          <Terminal className="h-4 w-4" />
-          <span className="text-xs">Terminal</span>
-        </Button>
-        <Button
-          variant="ghost"
-          className={`flex-1 rounded-none py-3 gap-2 ${activePanel === "transfers" ? "bg-accent" : ""}`}
-          onClick={() => setActivePanel("transfers")}
-          data-testid="button-mobile-transfers"
-        >
-          <ArrowUpDown className="h-4 w-4" />
-          <span className="text-xs">Transfers</span>
-        </Button>
-      </footer>
     </div>
   );
 }
