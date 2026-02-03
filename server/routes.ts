@@ -367,8 +367,8 @@ export async function registerRoutes(
       terminalSessions.delete(sessionId);
     }
 
-    // Spawn a new login shell to get proper Nix environment
-    const shell = spawn("/bin/bash", ["-l"], {
+    // Spawn a PTY-like shell using script command for vim support
+    const shell = spawn("script", ["-q", "-c", "/bin/bash -l", "/dev/null"], {
       cwd: WORKSPACE_ROOT,
       env: {
         ...process.env,
