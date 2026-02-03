@@ -366,9 +366,29 @@ export function FileBrowser({
     navigator.clipboard.writeText(path);
   };
 
-  const filteredEntries = listing?.entries.filter((entry) =>
-    entry.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEntries = listing?.entries.filter((entry) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    const name = entry.name.toLowerCase();
+    
+    // Check if query contains wildcards
+    if (query.includes("*") || query.includes("?")) {
+      // Convert glob pattern to regex: * -> .*, ? -> .
+      const regexPattern = query
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape regex special chars except * and ?
+        .replace(/\*/g, ".*")
+        .replace(/\?/g, ".");
+      try {
+        const regex = new RegExp(`^${regexPattern}$`);
+        return regex.test(name);
+      } catch {
+        return name.includes(query);
+      }
+    }
+    
+    // Default: simple substring match
+    return name.includes(query);
+  });
 
   const sortedEntries = filteredEntries?.sort((a, b) => {
     if (a.isDirectory && !b.isDirectory) return -1;
