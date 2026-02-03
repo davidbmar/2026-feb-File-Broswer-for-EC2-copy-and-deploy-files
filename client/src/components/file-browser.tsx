@@ -55,6 +55,8 @@ import {
 import type { FileEntry, DirectoryListing } from "@shared/schema";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface FileBrowserProps {
   panelId?: "left" | "right";
@@ -200,6 +202,7 @@ export function FileBrowser({
   const [viewerContent, setViewerContent] = useState<string>("");
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [markdownRaw, setMarkdownRaw] = useState(false);
 
   const isSelected = useCallback(
     (file: FileEntry) => selectedFiles.some((f) => f.path === file.path),
@@ -659,15 +662,26 @@ export function FileBrowser({
         </div>
       )}
 
-      <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+      <Dialog open={viewerOpen} onOpenChange={(open) => { setViewerOpen(open); if (!open) setMarkdownRaw(false); }}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
               <Eye className="h-5 w-5" />
               {viewerFile?.name}
               <span className="text-xs text-muted-foreground font-normal ml-2">
                 (Read Only)
               </span>
+              {(viewerFile?.name.endsWith(".md") || viewerFile?.name.endsWith(".markdown")) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => setMarkdownRaw(!markdownRaw)}
+                  data-testid="button-markdown-toggle"
+                >
+                  {markdownRaw ? "View Rendered" : "View Raw"}
+                </Button>
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-hidden rounded-md border border-border bg-muted/30">
@@ -679,6 +693,14 @@ export function FileBrowser({
               <div className="flex items-center justify-center h-full text-destructive">
                 <p>{viewerError}</p>
               </div>
+            ) : (viewerFile?.name.endsWith(".md") || viewerFile?.name.endsWith(".markdown")) && !markdownRaw ? (
+              <ScrollArea className="h-full">
+                <div className="p-4 prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {viewerContent}
+                  </ReactMarkdown>
+                </div>
+              </ScrollArea>
             ) : (
               <ScrollArea className="h-full">
                 <SyntaxHighlighter
