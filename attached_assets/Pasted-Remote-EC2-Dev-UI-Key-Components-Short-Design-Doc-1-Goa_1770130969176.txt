@@ -1,0 +1,189 @@
+Remote EC2 Dev UI — Key Components (Short Design Doc)
+1) Goals
+
+File explorer UI: browse directories, view file metadata, search/filter.
+
+Terminal with ssh semantics: run commands interactively.
+
+Open in vi/vim: when a file is selected, launch vim in a terminal session at that path.
+
+Bidirectional file transfer: upload local → EC2, download EC2 → local.
+
+Secure-by-default: no broad inbound SSH exposure; auditable access.
+
+2) High-level Architecture
+
+Browser (Mac)
+
+Web UI: file tree + terminal pane + transfer pane
+
+EC2-side “Gateway” service (single entrypoint)
+
+Small web server (reverse-proxied or directly exposed) that:
+
+Authenticates the user
+
+Creates and manages terminal sessions (PTY)
+
+Performs filesystem operations (list/read/write)
+
+Streams terminal I/O to the browser
+
+Handles file upload/download streams safely
+
+OS layer
+
+Runs commands as a constrained Linux user (or per-user)
+
+Uses normal tools: bash, vim, tar, etc.
+
+3) Core Components
+A) Web UI (front-end)
+
+File Browser Panel
+
+Directory tree (lazy-load)
+
+Breadcrumb navigation
+
+File actions: open, rename, delete, download, upload, copy path
+
+Terminal Panel
+
+Full interactive shell
+
+“Open in vim” just sends: vim /path/to/file
+
+Transfer Panel
+
+Drag-and-drop upload
+
+Download button / multi-select download
+
+Progress bars + cancel
+
+Key UI idea: don’t embed a custom editor—just use terminal streaming and vim inside the PTY.
+
+B) Session & Terminal Manager (PTY over WebSocket)
+
+When user opens terminal:
+
+Create a pseudo-terminal (PTY) on EC2
+
+Attach it to /bin/bash (or restricted shell)
+
+Stream bytes over WebSocket (bi-directional)
+
+“Open in vim”:
+
+Reuse the same PTY session and run vim <file>
+
+(Optionally) create a dedicated PTY per file if you want “tabs”
+
+This is the “heart” of vim in browser—you’re effectively running vim on EC2 and just streaming the TTY.
+
+C) Filesystem API (browse + safe ops)
+
+Minimal endpoints (or RPC methods):
+
+list_dir(path) → entries + permissions + size + modified time
+
+stat(path) → metadata
+
+mkdir(path), rm(path), mv(src,dst), chmod(path,mode) (optional)
+
+read_head(path, nbytes) for previews (optional)
+
+search(root, pattern) (optional; can call rg)
+
+Important safeguards
+
+Enforce a root sandbox (e.g., user can only access /home/ubuntu/workspace).
+
+Normalize paths to prevent ../ traversal.
+
+Rate limit expensive operations (recursive listing/search).
+
+D) File Transfer (upload/download)
+
+Upload (local → EC2)
+
+Browser posts multipart stream to gateway: POST /upload?dest=/some/dir
+
+Gateway writes to disk with:
+
+size limits
+
+allowed extension rules (optional)
+
+atomic write (write temp → rename)
+
+Download (EC2 → local)
+
+GET /download?path=/some/file_or_dir
+
+If directory: stream as tar.gz to avoid many requests
+
+Support multi-select by creating an on-the-fly archive
+
+E) AuthN/Z (who can access)
+
+Pick one, keep it simple:
+
+Option 1 (simplest for personal use): only allow access through VPN or SSM port-forward + local browser.
+
+Option 2 (team): put behind an ALB + OIDC (Cognito/Auth0) and enforce group-based authorization at gateway.
+
+Authorization should map user → allowed root directories and/or Linux user.
+
+F) Network & Reverse Proxy
+
+Reverse proxy like Nginx on EC2:
+
+TLS termination (or ALB handles TLS)
+
+Route /ws to WebSocket terminal
+
+Route /api to filesystem + transfer endpoints
+
+Security groups:
+
+Prefer no public inbound 22 if possible
+
+Expose only 443 (or none if using SSM tunnel)
+
+G) Auditability & Safety
+
+Log:
+
+user login events
+
+file upload/download operations (path, size, user)
+
+terminal session start/stop (not necessarily full keystrokes unless you need it)
+
+Limit blast radius:
+
+run gateway as non-root
+
+use a dedicated Linux user with least privileges
+
+optionally use containerization (Docker) to isolate
+
+4) Implementation Options (practical)
+
+“Just use an existing solution”: web terminal + file browser baked in
+
+Good for speed, less custom code
+
+“Thin custom gateway”: PTY + file APIs + upload/download
+
+Good if you want tight control and minimal dependency footprint
+
+5) Non-goals (keep scope tight)
+
+No custom in-browser IDE/editor required.
+
+No need for full Git UI (can just use terminal).
+
+No multi-host orchestration (start with one EC2).
