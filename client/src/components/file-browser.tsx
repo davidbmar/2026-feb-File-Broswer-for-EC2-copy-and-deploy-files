@@ -49,6 +49,8 @@ import {
   Edit3,
   Terminal,
   Copy,
+  Eye,
+  X,
 } from "lucide-react";
 import type { FileEntry, DirectoryListing } from "@shared/schema";
 
@@ -145,6 +147,11 @@ export function FileBrowser({
   const [newName, setNewName] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerFile, setViewerFile] = useState<FileEntry | null>(null);
+  const [viewerContent, setViewerContent] = useState<string>("");
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerError, setViewerError] = useState<string | null>(null);
 
   const isSelected = useCallback(
     (file: FileEntry) => selectedFiles.some((f) => f.path === file.path),
@@ -259,13 +266,35 @@ export function FileBrowser({
     setSearchQuery("");
   }, [setCurrentPath]);
 
+  const openFileViewer = useCallback(async (file: FileEntry) => {
+    setViewerFile(file);
+    setViewerOpen(true);
+    setViewerLoading(true);
+    setViewerError(null);
+    setViewerContent("");
+
+    try {
+      const res = await fetch(`/api/files/read?path=${encodeURIComponent(file.path)}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to read file");
+      }
+      const data = await res.json();
+      setViewerContent(data.content);
+    } catch (err) {
+      setViewerError((err as Error).message);
+    } finally {
+      setViewerLoading(false);
+    }
+  }, []);
+
   const handleDoubleClick = useCallback((entry: FileEntry) => {
     if (entry.isDirectory) {
       handleNavigate(entry.path);
     } else {
-      onOpenInTerminal(entry.path);
+      openFileViewer(entry);
     }
-  }, [handleNavigate, onOpenInTerminal]);
+  }, [handleNavigate, openFileViewer]);
 
   const handleRename = () => {
     if (selectedFile && newName) {
@@ -581,6 +610,46 @@ export function FileBrowser({
           <span className="text-2xs">Drag to other panel to transfer</span>
         </div>
       )}
+
+      <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              {viewerFile?.name}
+              <span className="text-xs text-muted-foreground font-normal ml-2">
+                (Read Only)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden rounded-md border border-border bg-muted/30">
+            {viewerLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+              </div>
+            ) : viewerError ? (
+              <div className="flex items-center justify-center h-full text-destructive">
+                <p>{viewerError}</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-full">
+                <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words">
+                  {viewerContent}
+                </pre>
+              </ScrollArea>
+            )}
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => onOpenInTerminal(viewerFile?.path || "")} data-testid="button-viewer-open-vim">
+              <Terminal className="h-4 w-4 mr-2" />
+              Open in Vim
+            </Button>
+            <Button onClick={() => setViewerOpen(false)} data-testid="button-viewer-close">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

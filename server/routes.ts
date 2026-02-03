@@ -265,6 +265,39 @@ export async function registerRoutes(
     }
   });
 
+  // Read file contents
+  app.get("/api/files/read", async (req, res) => {
+    try {
+      const filePath = req.query.path as string;
+      if (!filePath) {
+        return res.status(400).json({ error: "Path is required" });
+      }
+
+      const absolutePath = await normalizePath(filePath);
+      const stat = await fs.promises.stat(absolutePath);
+      
+      if (stat.isDirectory()) {
+        return res.status(400).json({ error: "Cannot read a directory" });
+      }
+
+      // Limit file size to 1MB for preview
+      if (stat.size > 1024 * 1024) {
+        return res.status(400).json({ error: "File too large to preview (max 1MB)" });
+      }
+
+      const content = await fs.promises.readFile(absolutePath, "utf-8");
+      res.json({
+        path: filePath,
+        content,
+        size: stat.size,
+        modified: stat.mtime.toISOString(),
+      });
+    } catch (error) {
+      log(`Error reading file: ${error}`);
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
   // Upload file
   app.post("/api/upload", upload.single("file"), (req, res) => {
     if (!req.file) {
