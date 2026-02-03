@@ -1,14 +1,15 @@
 # Remote EC2 Dev UI
 
-A web-based development environment UI featuring a file browser, interactive terminal, and file transfer capabilities. Currently works with the local filesystem with connection settings for future EC2 integration.
+A web-based development environment UI featuring dual-pane file browsers, interactive terminal, and drag-and-drop file transfer between panels. Currently works with the local filesystem with connection settings for future EC2 integration.
 
 ## Overview
 
 This application provides a remote development experience with:
-- **File Browser Panel** - Navigate directories, view metadata, search/filter files, context menu operations
-- **Terminal Panel** - Interactive shell with vim support, multiple sessions, WebSocket PTY streaming
-- **Transfer Panel** - Drag-and-drop file upload with progress tracking, directory download as zip
-- **Connection Settings** - Upload .pem file and enter EC2 credentials for future connection
+- **Dual-Pane File Browser** - Two side-by-side file panels, each configurable for local or SSH
+- **Multi-Select & Drag-Drop** - Select files and drag them to the other panel to transfer
+- **Collapsible Panels** - Minimize left or right panel to focus on one side
+- **Terminal Panel** - Interactive shell with vim support, multiple sessions
+- **Connection Settings** - Configure SSH for each panel independently
 
 ## Tech Stack
 
@@ -16,7 +17,7 @@ This application provides a remote development experience with:
 - **Terminal**: xterm.js (@xterm/xterm) for terminal rendering
 - **Backend**: Express.js with WebSocket for terminal streaming
 - **State Management**: TanStack Query for server state
-- **Styling**: Dark-mode optimized dev-tools theme
+- **Styling**: Dark/Light mode with dev-tools theme
 
 ## Project Structure
 
@@ -24,20 +25,20 @@ This application provides a remote development experience with:
 client/
 ├── src/
 │   ├── components/
-│   │   ├── file-browser.tsx     # Directory listing and file operations
+│   │   ├── file-browser.tsx     # Dual-pane file browser with drag-drop
 │   │   ├── terminal-panel.tsx   # xterm.js terminal with WebSocket
-│   │   ├── transfer-panel.tsx   # File upload/download UI
-│   │   ├── connection-settings.tsx  # EC2 connection config dialog
+│   │   ├── transfer-panel.tsx   # File upload/download UI (legacy)
+│   │   ├── connection-settings.tsx  # SSH connection config dialog
 │   │   └── theme-provider.tsx   # Dark/light mode toggle
 │   ├── pages/
-│   │   └── home.tsx             # Main layout with resizable panels
+│   │   └── home.tsx             # Main layout with dual panels
 │   └── App.tsx                  # Router and providers
 server/
 ├── routes.ts                    # API endpoints and WebSocket terminal
 ├── index.ts                     # Express server setup
 └── storage.ts                   # Storage interface (unused for now)
 shared/
-└── schema.ts                    # TypeScript interfaces for FileEntry, TransferProgress, etc.
+└── schema.ts                    # TypeScript interfaces for FileEntry, PanelConfig, etc.
 ```
 
 ## API Endpoints
@@ -46,6 +47,7 @@ shared/
 - `DELETE /api/files?path=` - Delete file or directory
 - `PATCH /api/files/rename` - Rename file or directory
 - `POST /api/files/mkdir` - Create directory
+- `POST /api/files/copy` - Copy files between directories
 - `POST /api/upload` - Upload file (multipart form data)
 - `GET /api/download?path=` - Download file or directory (zip for folders)
 - `WS /ws/terminal?session=` - WebSocket terminal connection
@@ -56,12 +58,15 @@ The application runs on port 5000 with `npm run dev`. The frontend and backend a
 
 ## Features
 
-### File Browser
-- Directory tree navigation with breadcrumbs
+### Dual-Pane File Browser
+- Two file browser panels side by side
+- Each panel independently configurable: Local or SSH remote
+- Click to select files, Ctrl/Cmd+click for multi-select
+- Drag files from one panel to drop on the other for transfer
+- Minimize/expand each panel with collapse buttons
+- Directory navigation with breadcrumbs
 - File search/filter
-- Context menu with: Open in Vim, Copy Path, Download, Rename, Delete
-- New folder creation
-- Upload button to open transfer panel
+- Context menu: Open in Vim, Copy Path, Download, Rename, Delete
 
 ### Terminal
 - Multiple terminal sessions (tabs)
@@ -70,22 +75,17 @@ The application runs on port 5000 with `npm run dev`. The frontend and backend a
 - Maximize/minimize terminal panel
 - JetBrains Mono font for code
 
-### File Transfer
-- Drag-and-drop file upload
-- Progress bars with status indicators
-- Directory download as zip archive
-- Transfer history with completion status
-
-### Connection Settings
+### Connection Settings (per panel)
+- Switch between Local filesystem and SSH
 - EC2 host/username/port configuration
 - .pem file upload for SSH key
 - Visual connection status indicator
-- Settings stored in component state (ready for backend integration)
 
 ## Design Decisions
 
-- Dark mode by default for developer comfort
-- Resizable panels for flexible workspace layout
-- Mobile-responsive with bottom tab navigation
+- Dark/Light mode toggle in header
+- Resizable vertical panels (files on top, terminal on bottom)
+- Dual-pane horizontal layout for file management
 - File icons color-coded by file type
-- Terminal uses GitHub dark theme colors
+- Selection indicators for multi-select
+- Drag-and-drop visual feedback with highlighted drop zones

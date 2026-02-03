@@ -1,20 +1,23 @@
 import { useState, useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { FileBrowser } from "@/components/file-browser";
 import { TerminalPanel } from "@/components/terminal-panel";
 import { ConnectionSettings } from "@/components/connection-settings";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Sun, Moon, Terminal, ChevronLeft, ChevronRight, 
   Maximize2, Minimize2, Monitor, Server 
 } from "lucide-react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { ConnectionConfig, InsertConnectionConfig, FileEntry, PanelConfig } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
   const [openVimPath, setOpenVimPath] = useState<string | null>(null);
   const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
 
@@ -118,13 +121,33 @@ export default function Home() {
     setRightPanel((prev) => ({ ...prev, selectedFiles: files }));
   }, []);
 
-  const handleFileDrop = useCallback(
-    (targetPanel: "left" | "right", files: FileEntry[], sourcePath: string) => {
-      const targetPath = targetPanel === "left" ? leftPanel.currentPath : rightPanel.currentPath;
-      console.log(`Transfer ${files.length} files from ${sourcePath} to ${targetPath}`);
-      queryClient.invalidateQueries({ queryKey: ["/api/files", targetPath] });
+  const copyMutation = useMutation({
+    mutationFn: async ({ sources, destination }: { sources: string[]; destination: string }) => {
+      return apiRequest("POST", "/api/files/copy", { sources, destination });
     },
-    [leftPanel.currentPath, rightPanel.currentPath]
+    onSuccess: (_, { destination }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/files", destination] });
+      toast({
+        title: "Files copied",
+        description: "Files have been copied successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Copy failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFileDrop = useCallback(
+    (targetPanel: "left" | "right", files: FileEntry[]) => {
+      const targetPath = targetPanel === "left" ? leftPanel.currentPath : rightPanel.currentPath;
+      const sources = files.map((f) => f.path);
+      copyMutation.mutate({ sources, destination: targetPath });
+    },
+    [leftPanel.currentPath, rightPanel.currentPath, copyMutation]
   );
 
   const toggleLeftMinimize = useCallback(() => {
@@ -291,7 +314,7 @@ export default function Home() {
                         setCurrentPath={handleLeftPathChange}
                         selectedFiles={leftPanel.selectedFiles}
                         onSelectionChange={handleLeftSelectionChange}
-                        onFileDrop={(files) => handleFileDrop("left", files, rightPanel.currentPath)}
+                        onFileDrop={(files) => handleFileDrop("left", files)}
                         isLocal={leftPanel.isLocal}
                       />
                     </div>
@@ -324,7 +347,7 @@ export default function Home() {
                         setCurrentPath={handleRightPathChange}
                         selectedFiles={rightPanel.selectedFiles}
                         onSelectionChange={handleRightSelectionChange}
-                        onFileDrop={(files) => handleFileDrop("right", files, leftPanel.currentPath)}
+                        onFileDrop={(files) => handleFileDrop("right", files)}
                         isLocal={rightPanel.isLocal}
                       />
                     </div>

@@ -221,6 +221,50 @@ export async function registerRoutes(
     }
   });
 
+  // Copy files
+  app.post("/api/files/copy", async (req, res) => {
+    try {
+      const { sources, destination } = req.body;
+      if (!sources || !Array.isArray(sources) || sources.length === 0) {
+        return res.status(400).json({ error: "Sources array is required" });
+      }
+      if (!destination) {
+        return res.status(400).json({ error: "Destination path is required" });
+      }
+
+      const destPath = await normalizePath(destination);
+      const destStat = await fs.promises.stat(destPath);
+      if (!destStat.isDirectory()) {
+        return res.status(400).json({ error: "Destination must be a directory" });
+      }
+
+      const results: { source: string; dest: string; success: boolean; error?: string }[] = [];
+
+      for (const source of sources) {
+        try {
+          const sourcePath = await normalizePath(source);
+          const fileName = path.basename(sourcePath);
+          const targetPath = path.join(destPath, fileName);
+
+          const sourceStat = await fs.promises.stat(sourcePath);
+          if (sourceStat.isDirectory()) {
+            await fs.promises.cp(sourcePath, targetPath, { recursive: true });
+          } else {
+            await fs.promises.copyFile(sourcePath, targetPath);
+          }
+          results.push({ source, dest: toRelativePath(targetPath), success: true });
+        } catch (err) {
+          results.push({ source, dest: "", success: false, error: (err as Error).message });
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      log(`Error copying files: ${error}`);
+      res.status(400).json({ error: (error as Error).message });
+    }
+  });
+
   // Upload file
   app.post("/api/upload", upload.single("file"), (req, res) => {
     if (!req.file) {
