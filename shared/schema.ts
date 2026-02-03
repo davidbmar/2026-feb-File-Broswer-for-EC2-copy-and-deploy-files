@@ -1,18 +1,48 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size: number;
+  modified: string;
+  permissions: string;
+}
+
+export interface DirectoryListing {
+  path: string;
+  entries: FileEntry[];
+  parent: string | null;
+}
+
+export interface ConnectionConfig {
+  id: string;
+  host: string;
+  username: string;
+  port: number;
+  pemFileName?: string;
+  connected: boolean;
+}
+
+export const connectionConfigSchema = z.object({
+  host: z.string().min(1, "Host is required"),
+  username: z.string().min(1, "Username is required"),
+  port: z.number().min(1).max(65535).default(22),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export type InsertConnectionConfig = z.infer<typeof connectionConfigSchema>;
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export interface TerminalSession {
+  id: string;
+  active: boolean;
+}
+
+export interface TransferProgress {
+  id: string;
+  filename: string;
+  progress: number;
+  total: number;
+  type: "upload" | "download";
+  status: "pending" | "in_progress" | "completed" | "error";
+  error?: string;
+}

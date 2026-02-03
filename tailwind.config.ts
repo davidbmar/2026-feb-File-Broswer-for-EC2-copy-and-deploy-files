@@ -87,6 +87,9 @@ export default {
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
       },
+      fontSize: {
+        "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
