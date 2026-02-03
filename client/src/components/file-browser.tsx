@@ -53,6 +53,8 @@ import {
   X,
 } from "lucide-react";
 import type { FileEntry, DirectoryListing } from "@shared/schema";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 interface FileBrowserProps {
   panelId?: "left" | "right";
@@ -99,6 +101,52 @@ function getFileIcon(entry: FileEntry) {
     default:
       return <File className="h-4 w-4 text-gray-400" />;
   }
+}
+
+function getLanguageFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const languageMap: Record<string, string> = {
+    js: "javascript",
+    jsx: "jsx",
+    ts: "typescript",
+    tsx: "tsx",
+    py: "python",
+    json: "json",
+    html: "html",
+    htm: "html",
+    css: "css",
+    scss: "scss",
+    sass: "sass",
+    less: "less",
+    md: "markdown",
+    markdown: "markdown",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    yaml: "yaml",
+    yml: "yaml",
+    xml: "xml",
+    sql: "sql",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    h: "c",
+    hpp: "cpp",
+    rb: "ruby",
+    php: "php",
+    swift: "swift",
+    kt: "kotlin",
+    toml: "toml",
+    ini: "ini",
+    dockerfile: "docker",
+    makefile: "makefile",
+    graphql: "graphql",
+    vue: "vue",
+    svelte: "svelte",
+  };
+  return languageMap[ext] || "text";
 }
 
 function formatFileSize(bytes: number): string {
@@ -633,9 +681,21 @@ export function FileBrowser({
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words">
+                <SyntaxHighlighter
+                  language={getLanguageFromFilename(viewerFile?.name || "")}
+                  style={oneDark}
+                  customStyle={{
+                    margin: 0,
+                    padding: "1rem",
+                    fontSize: "0.875rem",
+                    background: "transparent",
+                    minHeight: "100%",
+                  }}
+                  showLineNumbers
+                  wrapLongLines
+                >
                   {viewerContent}
-                </pre>
+                </SyntaxHighlighter>
               </ScrollArea>
             )}
           </div>
