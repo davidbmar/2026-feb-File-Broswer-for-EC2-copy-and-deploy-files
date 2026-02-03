@@ -722,7 +722,7 @@ export function FileBrowser({
             )}
           </div>
           <DialogFooter className="flex-shrink-0">
-            <Button variant="outline" onClick={() => onOpenInTerminal(viewerFile?.path || "")} data-testid="button-viewer-open-vim">
+            <Button variant="outline" onClick={() => { setViewerOpen(false); setTimeout(() => onOpenInTerminal(viewerFile?.path || ""), 100); }} data-testid="button-viewer-open-vim">
               <Terminal className="h-4 w-4 mr-2" />
               Open in Vim
             </Button>
