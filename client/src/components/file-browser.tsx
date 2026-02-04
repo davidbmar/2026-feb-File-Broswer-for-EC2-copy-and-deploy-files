@@ -68,6 +68,7 @@ interface FileBrowserProps {
   selectedFiles?: FileEntry[];
   onSelectionChange?: (files: FileEntry[]) => void;
   onFileDrop?: (files: FileEntry[], isCopy: boolean) => void;
+  onFileDropToFolder?: (files: FileEntry[], targetFolder: string, isCopy: boolean) => void;
   isLocal?: boolean;
 }
 
@@ -186,6 +187,7 @@ export function FileBrowser({
   selectedFiles = [],
   onSelectionChange,
   onFileDrop,
+  onFileDropToFolder,
   isLocal = true,
 }: FileBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -198,6 +200,7 @@ export function FileBrowser({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragIsCopy, setDragIsCopy] = useState(false);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFile, setViewerFile] = useState<FileEntry | null>(null);
   const [viewerContent, setViewerContent] = useState<string>("");
@@ -278,6 +281,49 @@ export function FileBrowser({
       }
     },
     [panelId, onFileDrop]
+  );
+
+  const handleFolderDragOver = useCallback((e: React.DragEvent, folderPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hasData = e.dataTransfer.types.includes("application/json");
+    if (hasData) {
+      setDragOverFolder(folderPath);
+      const isCopy = e.ctrlKey || e.metaKey;
+      setDragIsCopy(isCopy);
+      e.dataTransfer.dropEffect = isCopy ? "copy" : "move";
+    }
+  }, []);
+
+  const handleFolderDragLeave = useCallback((e: React.DragEvent) => {
+    e.stopPropagation();
+    setDragOverFolder(null);
+  }, []);
+
+  const handleFolderDrop = useCallback(
+    (e: React.DragEvent, folderPath: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOverFolder(null);
+      setIsDragOver(false);
+      setDragIsCopy(false);
+      
+      try {
+        const filesData = e.dataTransfer.getData("application/json");
+        if (filesData && onFileDropToFolder) {
+          const files = JSON.parse(filesData) as FileEntry[];
+          // Don't drop a folder into itself
+          const validFiles = files.filter(f => f.path !== folderPath && !folderPath.startsWith(f.path + "/"));
+          if (validFiles.length > 0) {
+            const isCopy = e.ctrlKey || e.metaKey;
+            onFileDropToFolder(validFiles, folderPath, isCopy);
+          }
+        }
+      } catch (err) {
+        console.error("Folder drop error:", err);
+      }
+    },
+    [onFileDropToFolder]
   );
 
   const { data: listing, isLoading, refetch } = useQuery<DirectoryListing>({
