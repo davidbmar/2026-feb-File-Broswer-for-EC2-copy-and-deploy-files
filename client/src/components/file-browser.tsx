@@ -238,7 +238,7 @@ export function FileBrowser({
       const filesToDrag = isSelected(file) ? selectedFiles : [file];
       e.dataTransfer.setData("application/json", JSON.stringify(filesToDrag));
       e.dataTransfer.setData("text/panel-id", panelId || "");
-      e.dataTransfer.effectAllowed = "copy";
+      e.dataTransfer.effectAllowed = "copyMove";
     },
     [selectedFiles, isSelected, panelId]
   );
@@ -262,6 +262,7 @@ export function FileBrowser({
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragOver(false);
+      setDragIsCopy(false);
       
       try {
         const filesData = e.dataTransfer.getData("application/json");
@@ -269,7 +270,6 @@ export function FileBrowser({
         
         if (filesData && sourcePanelId !== panelId && onFileDrop) {
           const files = JSON.parse(filesData) as FileEntry[];
-          // Ctrl/Cmd held = Copy, otherwise Move
           const isCopy = e.ctrlKey || e.metaKey;
           onFileDrop(files, isCopy);
         }
