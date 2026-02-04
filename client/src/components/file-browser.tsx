@@ -215,13 +215,19 @@ export function FileBrowser({
       if (!onSelectionChange) return;
       
       if (e.ctrlKey || e.metaKey) {
+        // Ctrl/Cmd click: toggle individual file selection
         if (isSelected(file)) {
           onSelectionChange(selectedFiles.filter((f) => f.path !== file.path));
         } else {
           onSelectionChange([...selectedFiles, file]);
         }
       } else {
-        onSelectionChange([file]);
+        // Regular click: if already selected and only one selected, unselect it
+        if (isSelected(file) && selectedFiles.length === 1) {
+          onSelectionChange([]);
+        } else {
+          onSelectionChange([file]);
+        }
       }
     },
     [selectedFiles, onSelectionChange, isSelected]
