@@ -14,6 +14,7 @@ interface TerminalPanelProps {
   onVimOpened: () => void;
   isMaximized: boolean;
   onToggleMaximize: () => void;
+  connectionId?: string | null;
 }
 
 export function TerminalPanel({
@@ -21,8 +22,9 @@ export function TerminalPanel({
   onVimOpened,
   isMaximized,
   onToggleMaximize,
+  connectionId,
 }: TerminalPanelProps) {
-  const [sessions, setSessions] = useState<TerminalSession[]>([{ id: "1", name: "bash" }]);
+  const [sessions, setSessions] = useState<TerminalSession[]>([{ id: "1", name: connectionId ? "ssh" : "bash" }]);
   const [activeSession, setActiveSession] = useState("1");
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<any>(null);
@@ -36,7 +38,11 @@ export function TerminalPanel({
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/terminal?session=${sessionId}`);
+    let wsUrl = `${protocol}//${window.location.host}/ws/terminal?session=${sessionId}`;
+    if (connectionId) {
+      wsUrl += `&connectionId=${encodeURIComponent(connectionId)}`;
+    }
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       if (xtermRef.current) {
@@ -64,7 +70,7 @@ export function TerminalPanel({
     };
 
     wsRef.current = ws;
-  }, []);
+  }, [connectionId]);
 
   useEffect(() => {
     let mounted = true;
@@ -176,7 +182,7 @@ export function TerminalPanel({
 
   const handleNewSession = () => {
     const newId = (parseInt(sessions[sessions.length - 1]?.id || "0") + 1).toString();
-    setSessions([...sessions, { id: newId, name: "bash" }]);
+    setSessions([...sessions, { id: newId, name: connectionId ? "ssh" : "bash" }]);
     setActiveSession(newId);
     sessionIdRef.current = newId;
     if (xtermRef.current) {

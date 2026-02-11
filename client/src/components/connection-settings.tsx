@@ -21,19 +21,25 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Settings, Server, Key, Upload, Check, AlertCircle, Wifi, WifiOff } from "lucide-react";
+import { Settings, Server, Key, Upload, Check, AlertCircle, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { connectionConfigSchema, type InsertConnectionConfig, type ConnectionConfig } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ConnectionSettingsProps {
   connection: ConnectionConfig | null;
   onSave: (config: InsertConnectionConfig, pemFile: File | null) => void;
+  onConnected?: () => void;
+  onDisconnected?: () => void;
+  panelId: "left" | "right";
   triggerClassName?: string;
   label?: string;
 }
 
-export function ConnectionSettings({ connection, onSave, triggerClassName, label }: ConnectionSettingsProps) {
+export function ConnectionSettings({ connection, onSave, onConnected, onDisconnected, panelId, triggerClassName, label }: ConnectionSettingsProps) {
   const [open, setOpen] = useState(false);
   const [pemFile, setPemFile] = useState<File | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<InsertConnectionConfig>({
@@ -45,8 +51,52 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
     },
   });
 
-  const handleSubmit = (values: InsertConnectionConfig) => {
-    onSave(values, pemFile);
+  const handleSubmit = async (values: InsertConnectionConfig) => {
+    setConnecting(true);
+    setError(null);
+
+    try {
+      // Step 1: Upload PEM key if provided
+      const pemToUpload = pemFile;
+      if (pemToUpload) {
+        const formData = new FormData();
+        formData.append("pemFile", pemToUpload);
+        formData.append("connectionId", panelId);
+        const uploadRes = await fetch("/api/ssh/upload-key", { method: "POST", body: formData });
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json();
+          throw new Error(data.error || "Failed to upload PEM key");
+        }
+      }
+
+      // Step 2: Establish SSH connection
+      const connectRes = await apiRequest("POST", "/api/ssh/connect", {
+        connectionId: panelId,
+        host: values.host,
+        port: values.port,
+        username: values.username,
+      });
+      if (!connectRes.ok) {
+        const data = await connectRes.json();
+        throw new Error(data.error || "Failed to connect");
+      }
+
+      // Step 3: Update parent state
+      onSave(values, pemToUpload);
+      onConnected?.();
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await apiRequest("POST", "/api/ssh/disconnect", { connectionId: panelId });
+    } catch {}
+    onDisconnected?.();
     setOpen(false);
   };
 
@@ -54,11 +104,12 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
     const file = e.target.files?.[0];
     if (file) {
       setPemFile(file);
+      setError(null);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(null); }}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className={`gap-2 ${triggerClassName || ""}`} data-testid="button-connection-settings">
           <Server className="h-4 w-4" />
@@ -90,6 +141,7 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                     <Input
                       placeholder="ec2-xx-xx-xx-xx.compute.amazonaws.com"
                       {...field}
+                      disabled={connecting}
                       data-testid="input-host"
                     />
                   </FormControl>
@@ -108,6 +160,7 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                     <Input
                       placeholder="ubuntu"
                       {...field}
+                      disabled={connecting}
                       data-testid="input-username"
                     />
                   </FormControl>
@@ -127,6 +180,7 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                       type="number"
                       {...field}
                       onChange={(e) => field.onChange(parseInt(e.target.value) || 22)}
+                      disabled={connecting}
                       data-testid="input-port"
                     />
                   </FormControl>
@@ -143,7 +197,7 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                     ? "border-green-500/50 bg-green-500/10"
                     : "border-muted-foreground/30 hover:border-muted-foreground/50"
                 }`}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !connecting && fileInputRef.current?.click()}
               >
                 {pemFile ? (
                   <>
@@ -158,7 +212,7 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                     <Key className="h-5 w-5 text-primary" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{connection.pemFileName}</p>
-                      <p className="text-xs text-muted-foreground">Click to replace</p>
+                      <p className="text-xs text-muted-foreground">Key uploaded. Click to replace</p>
                     </div>
                   </>
                 ) : (
@@ -188,29 +242,59 @@ export function ConnectionSettings({ connection, onSave, triggerClassName, label
                 {connection.connected ? (
                   <>
                     <Wifi className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-green-500">Connected</span>
+                    <span className="text-sm text-green-500 flex-1">Connected to {connection.host}</span>
                   </>
                 ) : (
                   <>
                     <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      Not connected - using local filesystem
+                    <span className="text-sm text-muted-foreground flex-1">
+                      Not connected
                     </span>
                   </>
                 )}
               </div>
             )}
 
+            {error && (
+              <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+
             <DialogFooter className="gap-2 sm:gap-0">
+              {connection?.connected && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDisconnect}
+                  disabled={connecting}
+                >
+                  Disconnect
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => setOpen(false)}
+                disabled={connecting}
               >
                 Cancel
               </Button>
-              <Button type="submit" data-testid="button-save-connection">
-                Save Settings
+              <Button
+                type="submit"
+                disabled={connecting || (!pemFile && !connection?.pemFileName)}
+                data-testid="button-save-connection"
+              >
+                {connecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : connection?.connected ? (
+                  "Reconnect"
+                ) : (
+                  "Connect"
+                )}
               </Button>
             </DialogFooter>
           </form>

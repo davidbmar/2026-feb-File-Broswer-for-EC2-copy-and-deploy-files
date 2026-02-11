@@ -51,6 +51,7 @@ import {
   Copy,
   Eye,
   X,
+  Server,
 } from "lucide-react";
 import type { FileEntry, DirectoryListing } from "@shared/schema";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -70,6 +71,7 @@ interface FileBrowserProps {
   onFileDrop?: (files: FileEntry[], isCopy: boolean) => void;
   onFileDropToFolder?: (files: FileEntry[], targetFolder: string, isCopy: boolean) => void;
   isLocal?: boolean;
+  connectionId?: string | null;
 }
 
 function getFileIcon(entry: FileEntry) {
@@ -189,6 +191,7 @@ export function FileBrowser({
   onFileDrop,
   onFileDropToFolder,
   isLocal = true,
+  connectionId,
 }: FileBrowserProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
@@ -327,20 +330,25 @@ export function FileBrowser({
   );
 
   const { data: listing, isLoading, refetch } = useQuery<DirectoryListing>({
-    queryKey: ["/api/files", currentPath],
+    queryKey: ["/api/files", currentPath, connectionId],
     queryFn: async () => {
-      const res = await fetch(`/api/files?path=${encodeURIComponent(currentPath)}`);
+      const params = new URLSearchParams({ path: currentPath });
+      if (connectionId) params.set("connectionId", connectionId);
+      const res = await fetch(`/api/files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch files");
       return res.json();
     },
+    enabled: isLocal || !!connectionId,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (path: string) => {
-      await apiRequest("DELETE", `/api/files?path=${encodeURIComponent(path)}`);
+    mutationFn: async (filePath: string) => {
+      const params = new URLSearchParams({ path: filePath });
+      if (connectionId) params.set("connectionId", connectionId);
+      await apiRequest("DELETE", `/api/files?${params}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath, connectionId] });
       setDeleteDialogOpen(false);
       setSelectedFile(null);
     },
@@ -348,10 +356,10 @@ export function FileBrowser({
 
   const renameMutation = useMutation({
     mutationFn: async ({ oldPath, newPath }: { oldPath: string; newPath: string }) => {
-      await apiRequest("PATCH", "/api/files/rename", { oldPath, newPath });
+      await apiRequest("PATCH", "/api/files/rename", { oldPath, newPath, connectionId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath, connectionId] });
       setRenameDialogOpen(false);
       setNewName("");
       setSelectedFile(null);
@@ -359,11 +367,11 @@ export function FileBrowser({
   });
 
   const createFolderMutation = useMutation({
-    mutationFn: async (path: string) => {
-      await apiRequest("POST", "/api/files/mkdir", { path });
+    mutationFn: async (dirPath: string) => {
+      await apiRequest("POST", "/api/files/mkdir", { path: dirPath, connectionId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath] });
+      queryClient.invalidateQueries({ queryKey: ["/api/files", currentPath, connectionId] });
       setNewFolderDialogOpen(false);
       setNewFolderName("");
     },
@@ -382,7 +390,9 @@ export function FileBrowser({
     setViewerContent("");
 
     try {
-      const res = await fetch(`/api/files/read?path=${encodeURIComponent(file.path)}`);
+      const params = new URLSearchParams({ path: file.path });
+      if (connectionId) params.set("connectionId", connectionId);
+      const res = await fetch(`/api/files/read?${params}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to read file");
@@ -394,7 +404,7 @@ export function FileBrowser({
     } finally {
       setViewerLoading(false);
     }
-  }, []);
+  }, [connectionId]);
 
   const handleDoubleClick = useCallback((entry: FileEntry) => {
     if (entry.isDirectory) {
@@ -557,7 +567,12 @@ export function FileBrowser({
             </div>
           </div>
         )}
-        {isLoading ? (
+        {!isLocal && !connectionId ? (
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+            <Server className="h-12 w-12 mb-3 opacity-50" />
+            <p className="text-sm">Configure SSH connection to browse remote files</p>
+          </div>
+        ) : isLoading ? (
           <div className="p-3 space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 p-2">

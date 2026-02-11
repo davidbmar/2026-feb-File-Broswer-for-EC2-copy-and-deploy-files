@@ -7,8 +7,8 @@ import { ConnectionSettings } from "@/components/connection-settings";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Sun, Moon, Terminal, ChevronLeft, ChevronRight, 
+import {
+  Sun, Moon, Terminal, ChevronLeft, ChevronRight,
   Maximize2, Minimize2, Monitor, Server, HelpCircle, ExternalLink
 } from "lucide-react";
 import {
@@ -53,6 +53,13 @@ export default function Home() {
     selectedFiles: [],
   });
 
+  // Derive connectionId for each panel
+  const leftConnectionId = leftPanel.isLocal ? null : (leftPanel.connection?.connected ? leftPanel.connection.id : null);
+  const rightConnectionId = rightPanel.isLocal ? null : (rightPanel.connection?.connected ? rightPanel.connection.id : null);
+
+  // Use the right panel's connectionId for terminal (since right panel defaults to remote)
+  const terminalConnectionId = rightConnectionId || leftConnectionId;
+
   const handleOpenInTerminal = useCallback((path: string) => {
     setOpenVimPath(path);
   }, []);
@@ -61,8 +68,10 @@ export default function Home() {
     setOpenVimPath(null);
   }, []);
 
-  const handleDownload = useCallback((path: string) => {
-    window.open(`/api/download?path=${encodeURIComponent(path)}`, "_blank");
+  const handleDownload = useCallback((path: string, connectionId?: string | null) => {
+    const params = new URLSearchParams({ path });
+    if (connectionId) params.set("connectionId", connectionId);
+    window.open(`/api/download?${params}`, "_blank");
   }, []);
 
   const handleLeftConnectionSave = useCallback(
@@ -97,11 +106,46 @@ export default function Home() {
     []
   );
 
+  const handleLeftConnected = useCallback(() => {
+    setLeftPanel((prev) => ({
+      ...prev,
+      connection: prev.connection ? { ...prev.connection, connected: true } : null,
+      currentPath: "/",
+    }));
+  }, []);
+
+  const handleRightConnected = useCallback(() => {
+    setRightPanel((prev) => ({
+      ...prev,
+      connection: prev.connection ? { ...prev.connection, connected: true } : null,
+      currentPath: "/",
+    }));
+  }, []);
+
+  const handleLeftDisconnected = useCallback(() => {
+    setLeftPanel((prev) => ({
+      ...prev,
+      isLocal: true,
+      connection: prev.connection ? { ...prev.connection, connected: false } : null,
+      currentPath: "/",
+    }));
+  }, []);
+
+  const handleRightDisconnected = useCallback(() => {
+    setRightPanel((prev) => ({
+      ...prev,
+      isLocal: true,
+      connection: prev.connection ? { ...prev.connection, connected: false } : null,
+      currentPath: "/",
+    }));
+  }, []);
+
   const handleSetLeftLocal = useCallback(() => {
     setLeftPanel((prev) => ({
       ...prev,
       isLocal: true,
       connection: null,
+      currentPath: "/",
     }));
   }, []);
 
@@ -110,6 +154,7 @@ export default function Home() {
       ...prev,
       isLocal: true,
       connection: null,
+      currentPath: "/",
     }));
   }, []);
 
@@ -129,58 +174,88 @@ export default function Home() {
     setRightPanel((prev) => ({ ...prev, selectedFiles: files }));
   }, []);
 
+  // Same-host copy mutation
   const copyMutation = useMutation({
-    mutationFn: async ({ sources, destination }: { sources: string[]; destination: string }) => {
-      return apiRequest("POST", "/api/files/copy", { sources, destination });
+    mutationFn: async ({ sources, destination, connectionId }: { sources: string[]; destination: string; connectionId?: string | null }) => {
+      return apiRequest("POST", "/api/files/copy", { sources, destination, connectionId: connectionId || undefined });
     },
-    onSuccess: (_, { destination }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/files", destination] });
-      toast({
-        title: "Files copied",
-        description: "Files have been copied successfully",
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/files"] });
+      toast({ title: "Files copied", description: "Files have been copied successfully" });
     },
     onError: (error) => {
-      toast({
-        title: "Copy failed",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
+      toast({ title: "Copy failed", description: (error as Error).message, variant: "destructive" });
     },
   });
 
+  // Same-host move mutation
   const moveMutation = useMutation({
-    mutationFn: async ({ sources, destination }: { sources: string[]; destination: string }) => {
-      return apiRequest("POST", "/api/files/move", { sources, destination });
+    mutationFn: async ({ sources, destination, connectionId }: { sources: string[]; destination: string; connectionId?: string | null }) => {
+      return apiRequest("POST", "/api/files/move", { sources, destination, connectionId: connectionId || undefined });
     },
-    onSuccess: (_, { destination }) => {
-      // Invalidate both source and destination directories
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/files"] });
-      toast({
-        title: "Files moved",
-        description: "Files have been moved successfully",
-      });
+      toast({ title: "Files moved", description: "Files have been moved successfully" });
     },
     onError: (error) => {
-      toast({
-        title: "Move failed",
-        description: (error as Error).message,
-        variant: "destructive",
+      toast({ title: "Move failed", description: (error as Error).message, variant: "destructive" });
+    },
+  });
+
+  // Cross-host transfer mutation
+  const transferMutation = useMutation({
+    mutationFn: async ({ sources, destination, sourceConnectionId, destConnectionId, operation }: {
+      sources: string[];
+      destination: string;
+      sourceConnectionId: string | null;
+      destConnectionId: string | null;
+      operation: "copy" | "move";
+    }) => {
+      return apiRequest("POST", "/api/files/transfer", {
+        sources,
+        destination,
+        sourceConnectionId: sourceConnectionId || undefined,
+        destConnectionId: destConnectionId || undefined,
+        operation,
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/files"] });
+      toast({ title: "Transfer complete", description: "Files have been transferred successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Transfer failed", description: (error as Error).message, variant: "destructive" });
     },
   });
 
   const handleFileDrop = useCallback(
     (targetPanel: "left" | "right", files: FileEntry[], isCopy: boolean) => {
-      const targetPath = targetPanel === "left" ? leftPanel.currentPath : rightPanel.currentPath;
+      const sourcePanel = targetPanel === "left" ? rightPanel : leftPanel;
+      const destPanel = targetPanel === "left" ? leftPanel : rightPanel;
+      const sourceConnId = sourcePanel.isLocal ? null : (sourcePanel.connection?.connected ? sourcePanel.connection.id : null);
+      const destConnId = destPanel.isLocal ? null : (destPanel.connection?.connected ? destPanel.connection.id : null);
+      const targetPath = destPanel.currentPath;
       const sources = files.map((f) => f.path);
-      if (isCopy) {
-        copyMutation.mutate({ sources, destination: targetPath });
+
+      if (sourceConnId !== destConnId) {
+        // Cross-host transfer
+        transferMutation.mutate({
+          sources,
+          destination: targetPath,
+          sourceConnectionId: sourceConnId,
+          destConnectionId: destConnId,
+          operation: isCopy ? "copy" : "move",
+        });
       } else {
-        moveMutation.mutate({ sources, destination: targetPath });
+        // Same-host operation
+        if (isCopy) {
+          copyMutation.mutate({ sources, destination: targetPath, connectionId: destConnId });
+        } else {
+          moveMutation.mutate({ sources, destination: targetPath, connectionId: destConnId });
+        }
       }
     },
-    [leftPanel.currentPath, rightPanel.currentPath, copyMutation, moveMutation]
+    [leftPanel, rightPanel, copyMutation, moveMutation, transferMutation]
   );
 
   const toggleLeftMinimize = useCallback(() => {
@@ -194,12 +269,16 @@ export default function Home() {
   const PanelHeader = ({
     panel,
     onConnectionSave,
+    onConnected,
+    onDisconnected,
     onSetLocal,
     onToggleMinimize,
     side,
   }: {
     panel: PanelConfig;
     onConnectionSave: (config: InsertConnectionConfig, pemFile: File | null) => void;
+    onConnected: () => void;
+    onDisconnected: () => void;
     onSetLocal: () => void;
     onToggleMinimize: () => void;
     side: "left" | "right";
@@ -227,6 +306,11 @@ export default function Home() {
                 <Monitor className="h-3 w-3" />
                 Local
               </Badge>
+            ) : panel.connection?.connected ? (
+              <Badge variant="default" className="gap-1 bg-green-600">
+                <Server className="h-3 w-3" />
+                {panel.connection.host}
+              </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
                 <Server className="h-3 w-3" />
@@ -251,6 +335,9 @@ export default function Home() {
             <ConnectionSettings
               connection={panel.connection}
               onSave={onConnectionSave}
+              onConnected={onConnected}
+              onDisconnected={onDisconnected}
+              panelId={side}
               triggerClassName="h-7"
               label={panel.isLocal ? "SSH" : "Edit"}
             />
@@ -421,13 +508,14 @@ export default function Home() {
             onVimOpened={handleVimOpened}
             isMaximized={isTerminalMaximized}
             onToggleMaximize={() => setIsTerminalMaximized(false)}
+            connectionId={terminalConnectionId}
           />
         ) : (
           <ResizablePanelGroup direction="vertical" className="h-full">
             <ResizablePanel defaultSize={65} minSize={30}>
               <ResizablePanelGroup direction="horizontal" className="h-full">
-                <ResizablePanel 
-                  defaultSize={leftPanel.isMinimized ? 3 : 50} 
+                <ResizablePanel
+                  defaultSize={leftPanel.isMinimized ? 3 : 50}
                   minSize={leftPanel.isMinimized ? 3 : 3}
                   maxSize={leftPanel.isMinimized ? 3 : 97}
                 >
@@ -442,6 +530,8 @@ export default function Home() {
                       <PanelHeader
                         panel={leftPanel}
                         onConnectionSave={handleLeftConnectionSave}
+                        onConnected={handleLeftConnected}
+                        onDisconnected={handleLeftDisconnected}
                         onSetLocal={handleSetLeftLocal}
                         onToggleMinimize={toggleLeftMinimize}
                         side="left"
@@ -450,13 +540,14 @@ export default function Home() {
                         <FileBrowser
                           panelId="left"
                           onOpenInTerminal={handleOpenInTerminal}
-                          onDownload={handleDownload}
+                          onDownload={(path) => handleDownload(path, leftConnectionId)}
                           currentPath={leftPanel.currentPath}
                           setCurrentPath={handleLeftPathChange}
                           selectedFiles={leftPanel.selectedFiles}
                           onSelectionChange={handleLeftSelectionChange}
                           onFileDrop={(files, isCopy) => handleFileDrop("left", files, isCopy)}
                           isLocal={leftPanel.isLocal}
+                          connectionId={leftConnectionId}
                         />
                       </div>
                     </div>
@@ -465,8 +556,8 @@ export default function Home() {
 
                 <ResizableHandle withHandle />
 
-                <ResizablePanel 
-                  defaultSize={rightPanel.isMinimized ? 3 : 50} 
+                <ResizablePanel
+                  defaultSize={rightPanel.isMinimized ? 3 : 50}
                   minSize={rightPanel.isMinimized ? 3 : 3}
                   maxSize={rightPanel.isMinimized ? 3 : 97}
                 >
@@ -481,6 +572,8 @@ export default function Home() {
                       <PanelHeader
                         panel={rightPanel}
                         onConnectionSave={handleRightConnectionSave}
+                        onConnected={handleRightConnected}
+                        onDisconnected={handleRightDisconnected}
                         onSetLocal={handleSetRightLocal}
                         onToggleMinimize={toggleRightMinimize}
                         side="right"
@@ -489,13 +582,14 @@ export default function Home() {
                         <FileBrowser
                           panelId="right"
                           onOpenInTerminal={handleOpenInTerminal}
-                          onDownload={handleDownload}
+                          onDownload={(path) => handleDownload(path, rightConnectionId)}
                           currentPath={rightPanel.currentPath}
                           setCurrentPath={handleRightPathChange}
                           selectedFiles={rightPanel.selectedFiles}
                           onSelectionChange={handleRightSelectionChange}
                           onFileDrop={(files, isCopy) => handleFileDrop("right", files, isCopy)}
                           isLocal={rightPanel.isLocal}
+                          connectionId={rightConnectionId}
                         />
                       </div>
                     </div>
@@ -512,6 +606,7 @@ export default function Home() {
                 onVimOpened={handleVimOpened}
                 isMaximized={isTerminalMaximized}
                 onToggleMaximize={() => setIsTerminalMaximized(true)}
+                connectionId={terminalConnectionId}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
