@@ -9,8 +9,16 @@ import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Sun, Moon, Terminal, ChevronLeft, ChevronRight, 
-  Maximize2, Minimize2, Monitor, Server 
+  Maximize2, Minimize2, Monitor, Server, HelpCircle, ExternalLink
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { ConnectionConfig, InsertConnectionConfig, FileEntry, PanelConfig } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
@@ -288,6 +296,109 @@ export default function Home() {
         </div>
 
         <div className="flex-1" />
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              data-testid="button-help"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Terminal className="h-5 w-5" />
+                Deployment Instructions
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="h-[60vh] pr-4">
+              <div className="space-y-6 text-sm">
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Overview</h3>
+                  <p className="text-muted-foreground">
+                    This Remote Dev UI can be deployed on your laptop or an EC2 instance to manage local and remote filesystems through a web interface.
+                  </p>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Prerequisites</h3>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Node.js 18+ installed</li>
+                    <li>npm or yarn package manager</li>
+                    <li>Git (to clone the repository)</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Deploy on Your Laptop</h3>
+                  <div className="bg-muted p-3 rounded-md font-mono text-xs space-y-2">
+                    <p className="text-muted-foreground"># 1. Clone or download the project</p>
+                    <p>git clone &lt;repository-url&gt;</p>
+                    <p>cd remote-dev-ui</p>
+                    <p className="text-muted-foreground mt-2"># 2. Install dependencies</p>
+                    <p>npm install</p>
+                    <p className="text-muted-foreground mt-2"># 3. Start the application</p>
+                    <p>npm run dev</p>
+                    <p className="text-muted-foreground mt-2"># 4. Open in browser</p>
+                    <p>http://localhost:5000</p>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Deploy on EC2</h3>
+                  <div className="bg-muted p-3 rounded-md font-mono text-xs space-y-2">
+                    <p className="text-muted-foreground"># 1. SSH into your EC2 instance</p>
+                    <p>ssh -i your-key.pem ec2-user@your-ec2-ip</p>
+                    <p className="text-muted-foreground mt-2"># 2. Install Node.js (if not installed)</p>
+                    <p>curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -</p>
+                    <p>sudo apt-get install -y nodejs</p>
+                    <p className="text-muted-foreground mt-2"># 3. Clone and setup the project</p>
+                    <p>git clone &lt;repository-url&gt;</p>
+                    <p>cd remote-dev-ui</p>
+                    <p>npm install</p>
+                    <p className="text-muted-foreground mt-2"># 4. Start with PM2 (recommended for production)</p>
+                    <p>npm install -g pm2</p>
+                    <p>pm2 start npm --name "dev-ui" -- run dev</p>
+                    <p className="text-muted-foreground mt-2"># 5. Configure security group</p>
+                    <p className="text-muted-foreground"># Allow inbound traffic on port 5000</p>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Production Build</h3>
+                  <div className="bg-muted p-3 rounded-md font-mono text-xs space-y-2">
+                    <p className="text-muted-foreground"># Build for production</p>
+                    <p>npm run build</p>
+                    <p className="text-muted-foreground mt-2"># Start production server</p>
+                    <p>NODE_ENV=production node dist/index.js</p>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Environment Variables</h3>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li><code className="bg-muted px-1 rounded">PORT</code> - Server port (default: 5000)</li>
+                    <li><code className="bg-muted px-1 rounded">SESSION_SECRET</code> - Session encryption key</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h3 className="font-semibold text-base mb-2">Features</h3>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Dual-pane file browser with drag-and-drop</li>
+                    <li>Move files (drag) or Copy (Ctrl/Cmd + drag)</li>
+                    <li>Interactive terminal with multiple sessions</li>
+                    <li>File preview with syntax highlighting</li>
+                    <li>SSH connection settings for remote access</li>
+                  </ul>
+                </section>
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
 
         <Button
           size="icon"
